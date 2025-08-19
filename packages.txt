@@ -1,0 +1,5 @@
+# Arquivo para instalar dependências do sistema no Streamlit Cloud
+# Se necessário, adicione pacotes do sistema aqui
+# Exemplo: libgomp1, libgl1-mesa-glx, etc.
+
+
