@@ -29,6 +29,30 @@ Aplicação web interativa para validação de itens da planilha do Índice de I
 - **Back-end**: Google Sheets (armazenamento em nuvem) ou arquivos JSON locais
 - **Hospedagem**: Streamlit Cloud (gratuito)
 
+## 🚀 Deploy Rápido no Streamlit Cloud
+
+### 1. Fork do Repositório
+1. Acesse [https://github.com/iht627123067-art/indice-validacao-streamlit](https://github.com/iht627123067-art/indice-validacao-streamlit)
+2. Clique em "Fork" no canto superior direito
+3. Escolha sua conta GitHub
+
+### 2. Deploy no Streamlit Cloud
+1. Acesse [https://share.streamlit.io/](https://share.streamlit.io/)
+2. Faça login com sua conta GitHub
+3. Clique em "New app"
+4. Selecione seu fork do repositório
+5. Configure:
+   - **Repository**: `seu-usuario/indice-validacao-streamlit`
+   - **Branch**: `main`
+   - **Main file path**: `streamlit_app.py`
+6. Clique em "Deploy!"
+
+### 3. Configurar Secrets (Opcional - para Google Sheets)
+Se quiser usar a versão com Google Sheets:
+1. No painel do Streamlit Cloud, vá em "Settings" → "Secrets"
+2. Cole o conteúdo do arquivo `.streamlit/secrets.toml`
+3. Substitua os valores placeholder pelos seus dados reais
+
 ## 📋 Pré-requisitos
 
 1. Python 3.8+
@@ -36,12 +60,12 @@ Aplicação web interativa para validação de itens da planilha do Índice de I
 3. Google Sheets API ativada (opcional)
 4. Service Account configurada (opcional)
 
-## 🔧 Instalação
+## 🔧 Instalação Local
 
 ### 1. Clonar o repositório
 ```bash
-git clone <seu-repositorio>
-cd indice_validacao
+git clone https://github.com/SEU_USUARIO/indice-validacao-streamlit.git
+cd indice-validacao-streamlit
 ```
 
 ### 2. Criar ambiente virtual
@@ -124,3 +148,21 @@ Para problemas ou dúvidas:
 ## 📝 Licença
 
 Este projeto é de uso interno para validação do Índice de Inovação Pública.
+
+## 🔄 Sincronização com o Repositório Original
+
+Para manter seu fork atualizado com as mudanças do repositório original:
+
+```bash
+# Adicionar o repositório original como upstream (se ainda não fez)
+git remote add upstream https://github.com/iht627123067-art/indice-validacao-streamlit.git
+
+# Buscar as últimas mudanças
+git fetch upstream
+
+# Fazer merge das mudanças
+git merge upstream/main
+
+# Enviar para seu fork
+git push origin main
+```
