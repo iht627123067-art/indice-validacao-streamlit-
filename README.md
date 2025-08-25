@@ -64,7 +64,7 @@ Se quiser usar a versão com Google Sheets:
 
 ### 1. Clonar o repositório
 ```bash
-git clone https://github.com/SEU_USUARIO/indice-validacao-streamlit.git
+git clone https://github.com/iht627123067-art/indice-validacao-streamlit
 cd indice-validacao-streamlit
 ```
 
