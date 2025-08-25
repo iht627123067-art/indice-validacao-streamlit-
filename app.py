@@ -27,7 +27,7 @@ def load_data():
     """Carrega os dados do arquivo CSV preparado"""
     try:
         # Caminho para o arquivo CSV
-        csv_path = Path("../raw_news/dados_preparados/chile_iip_2025_preparado.csv")
+        csv_path = Path("data/chile_iip_2025_preparado.csv")
         df = pd.read_csv(csv_path)
         
         # Limpar dados

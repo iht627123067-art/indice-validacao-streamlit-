@@ -23,7 +23,7 @@ def load_data():
         
         # Se não encontrar no caminho local, tentar caminho relativo
         if not csv_path.exists():
-            csv_path = Path("../raw_news/dados_preparados/chile_iip_2025_preparado.csv")
+            csv_path = Path("data/chile_iip_2025_preparado.csv")
         
         df = pd.read_csv(csv_path)
         

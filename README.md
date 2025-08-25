@@ -26,42 +26,52 @@ Aplicação web interativa para validação de itens da planilha do Índice de I
 ## 🛠️ Tecnologias
 
 - **Front-end**: Streamlit (interface amigável e responsiva)
-- **Back-end/SGBD**: Google Sheets (armazenamento em nuvem)
+- **Back-end**: Google Sheets (armazenamento em nuvem) ou arquivos JSON locais
 - **Hospedagem**: Streamlit Cloud (gratuito)
 
 ## 📋 Pré-requisitos
 
 1. Python 3.8+
-2. Conta Google Cloud Platform
-3. Google Sheets API ativada
-4. Service Account configurada
+2. Conta Google Cloud Platform (para versão com Google Sheets)
+3. Google Sheets API ativada (opcional)
+4. Service Account configurada (opcional)
 
 ## 🔧 Instalação
 
-### 1. Configurar Google Sheets
+### 1. Clonar o repositório
 ```bash
-python setup_google_sheets.py
+git clone <seu-repositorio>
+cd indice_validacao
 ```
 
-### 2. Instalar dependências
+### 2. Criar ambiente virtual
 ```bash
-cd Streamlit
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# ou
+venv\Scripts\activate     # Windows
+```
+
+### 3. Instalar dependências
+```bash
 pip install -r requirements.txt
 ```
 
-### 3. Configurar credenciais
-- Baixe o arquivo de credenciais do Google Cloud Console
-- Renomeie para `credentials.json`
-- Coloque na pasta `Streamlit/`
-
 ### 4. Executar aplicação
+
+#### Versão Local (JSON)
+```bash
+streamlit run streamlit_app.py
+```
+
+#### Versão Completa (Google Sheets)
 ```bash
 streamlit run app.py
 ```
 
 ## 📊 Estrutura dos Dados
 
-A aplicação utiliza o arquivo `chile_iip_2025_preparado.csv` que contém:
+A aplicação utiliza o arquivo `data/chile_iip_2025_preparado.csv` que contém:
 
 - **sistema**: Identificador do sistema (chile)
 - **ano**: Ano de referência (2025)
@@ -86,7 +96,8 @@ A aplicação utiliza o arquivo `chile_iip_2025_preparado.csv` que contém:
 
 ## 📈 Resultados
 
-As validações são salvas automaticamente no Google Sheets com:
+### Versão Local (JSON)
+As validações são salvas em arquivos JSON na pasta `validations/` com:
 - Timestamp da avaliação
 - Identificação do avaliador
 - Dados completos do item
@@ -94,18 +105,21 @@ As validações são salvas automaticamente no Google Sheets com:
 - Comentários e sugestões
 - Novos itens propostos
 
+### Versão Google Sheets
+As validações são salvas automaticamente no Google Sheets com os mesmos dados.
+
 ## 🔒 Segurança
 
 - Cada usuário só pode ver suas próprias validações
-- Dados armazenados de forma segura no Google Sheets
-- Controle de acesso via Service Account
+- Dados armazenados de forma segura (Google Sheets ou arquivos locais)
+- Controle de acesso via Service Account (Google Sheets)
 
 ## 🆘 Suporte
 
 Para problemas ou dúvidas:
-1. Verifique se as credenciais estão configuradas corretamente
-2. Confirme se o arquivo CSV existe no caminho correto
-3. Verifique se a Google Sheets API está ativada
+1. Verifique se as dependências estão instaladas corretamente
+2. Confirme se o arquivo CSV existe em `data/chile_iip_2025_preparado.csv`
+3. Para Google Sheets: verifique se as credenciais estão configuradas
 
 ## 📝 Licença
 
