@@ -13,6 +13,15 @@
 3. Escolha sua conta GitHub
 4. Aguarde a criação do fork
 
+
+    echo "# indice-validacao-streamlit-" >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/iht627123067-art/indice-validacao-streamlit-.git
+git push -u origin main
+
 ## 🌐 Passo 2: Deploy no Streamlit Cloud
 
 1. Acesse: [https://share.streamlit.io/](https://share.streamlit.io/)
