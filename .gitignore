@@ -23,6 +23,7 @@ ENV/
 credentials.json
 *.key
 *.pem
+.streamlit/secrets.toml
 
 # Arquivos do sistema
 .DS_Store

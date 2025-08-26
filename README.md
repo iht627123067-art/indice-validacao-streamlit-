@@ -29,6 +29,18 @@ Aplicação web interativa para validação de itens da planilha do Índice de I
 - **Back-end**: Google Sheets (armazenamento em nuvem) ou arquivos JSON locais
 - **Hospedagem**: Streamlit Cloud (gratuito)
 
+## 🔒 Configuração de Segurança
+
+### Para Desenvolvimento Local:
+1. **Copie o template**: `cp .streamlit/secrets.toml.template .streamlit/secrets.toml`
+2. **Configure suas credenciais** no arquivo `secrets.toml`
+3. **NUNCA commite** o arquivo `secrets.toml` (já está no .gitignore)
+
+### Para Streamlit Cloud:
+1. **No painel do Streamlit Cloud**, vá em **"Settings"** → **"Secrets"**
+2. **Cole o conteúdo** do seu arquivo `secrets.toml` local
+3. **Clique em "Save"**
+
 ## 🚀 Deploy Rápido no Streamlit Cloud
 
 ### 1. Fork do Repositório
@@ -81,7 +93,15 @@ venv\Scripts\activate     # Windows
 pip install -r requirements.txt
 ```
 
-### 4. Executar aplicação
+### 4. Configurar credenciais (opcional)
+```bash
+# Copiar template
+cp .streamlit/secrets.toml.template .streamlit/secrets.toml
+# Editar com suas credenciais
+nano .streamlit/secrets.toml
+```
+
+### 5. Executar aplicação
 
 #### Versão Local (JSON)
 ```bash
@@ -137,6 +157,7 @@ As validações são salvas automaticamente no Google Sheets com os mesmos dados
 - Cada usuário só pode ver suas próprias validações
 - Dados armazenados de forma segura (Google Sheets ou arquivos locais)
 - Controle de acesso via Service Account (Google Sheets)
+- **Credenciais protegidas** via .gitignore e Streamlit Cloud Secrets
 
 ## 🆘 Suporte
 
@@ -144,6 +165,7 @@ Para problemas ou dúvidas:
 1. Verifique se as dependências estão instaladas corretamente
 2. Confirme se o arquivo CSV existe em `data/chile_iip_2025_preparado.csv`
 3. Para Google Sheets: verifique se as credenciais estão configuradas
+4. Verifique se o arquivo `secrets.toml` está configurado corretamente
 
 ## 📝 Licença
 
