@@ -46,22 +46,35 @@ def load_data():
 # Função para converter tipos numpy/pandas para tipos Python nativos
 def convert_to_native_types(obj):
     """Converte tipos numpy/pandas para tipos Python nativos (JSON serializáveis)"""
-    if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
-        return int(obj)
-    elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
-        return float(obj)
-    elif isinstance(obj, np.bool_):
-        return bool(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, dict):
-        return {key: convert_to_native_types(value) for key, value in obj.items()}
-    elif isinstance(obj, (list, tuple)):
-        return [convert_to_native_types(item) for item in obj]
-    elif pd.isna(obj):
+    try:
+        if obj is None:
+            return None
+        elif isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
+            # Verificar se não é NaN
+            if pd.isna(obj) or np.isnan(obj):
+                return None
+            return float(obj)
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {str(key): convert_to_native_types(value) for key, value in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [convert_to_native_types(item) for item in obj]
+        elif pd.isna(obj):
+            return None
+        elif isinstance(obj, str):
+            # Garantir que strings não contenham caracteres problemáticos
+            return str(obj)
+        else:
+            # Tentar converter para string como último recurso
+            return str(obj) if obj else None
+    except Exception as e:
+        # Em caso de erro, retornar None ou string vazia
         return None
-    else:
-        return obj
 
 # Função para salvar validação localmente
 def save_validation_local(validation_data):
@@ -70,22 +83,69 @@ def save_validation_local(validation_data):
         # Converter tipos numpy/pandas para tipos Python nativos
         validation_data_clean = convert_to_native_types(validation_data)
         
+        # Garantir que todos os valores sejam serializáveis
+        # Remover chaves com valores None problemáticos ou converter para strings vazias
+        for key, value in list(validation_data_clean.items()):
+            if value is None:
+                validation_data_clean[key] = None  # None é válido em JSON
+            elif isinstance(value, float) and (pd.isna(value) or np.isnan(value)):
+                validation_data_clean[key] = None
+        
         # Criar pasta para validações se não existir
         validations_dir = Path("validations")
         validations_dir.mkdir(exist_ok=True)
         
         # Nome do arquivo baseado no usuário e timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"validation_{validation_data_clean['usuario']}_{timestamp}.json"
+        usuario_clean = str(validation_data_clean.get('usuario', 'usuario')).replace('/', '_').replace('\\', '_')
+        filename = f"validation_{usuario_clean}_{timestamp}.json"
         filepath = validations_dir / filename
+        
+        # Validar e limpar dados antes de salvar
+        def clean_value(v):
+            """Limpa valores para garantir serialização JSON"""
+            if v is None:
+                return None
+            elif isinstance(v, float):
+                if pd.isna(v) or np.isnan(v) or np.isinf(v):
+                    return None
+                return v
+            elif isinstance(v, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+                return int(v)
+            elif isinstance(v, (np.floating, np.float64, np.float32, np.float16)):
+                if pd.isna(v) or np.isnan(v) or np.isinf(v):
+                    return None
+                return float(v)
+            elif isinstance(v, np.bool_):
+                return bool(v)
+            elif isinstance(v, str):
+                # Remover caracteres de controle problemáticos
+                return v.replace('\x00', '').replace('\r', ' ').replace('\n', ' ')
+            else:
+                return v
+        
+        # Limpar todos os valores
+        validation_data_clean = {k: clean_value(v) for k, v in validation_data_clean.items()}
+        
+        # Validar JSON antes de salvar
+        try:
+            json_str = json.dumps(validation_data_clean, ensure_ascii=False, default=str)
+            # Testar se pode ser lido de volta
+            json.loads(json_str)
+        except (TypeError, ValueError, json.JSONDecodeError) as e:
+            st.error(f"Erro ao validar dados JSON: {e}")
+            # Última tentativa: converter tudo para string
+            validation_data_clean = {k: str(v) if v is not None else None for k, v in validation_data_clean.items()}
         
         # Salvar dados
         with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(validation_data_clean, f, ensure_ascii=False, indent=2)
+            json.dump(validation_data_clean, f, ensure_ascii=False, indent=2, default=str)
         
         return True
     except Exception as e:
         st.error(f"Erro ao salvar validação: {e}")
+        import traceback
+        st.error(f"Detalhes: {traceback.format_exc()}")
         return False
 
 # Função para carregar validações existentes
@@ -102,10 +162,26 @@ def load_existing_validations():
         for json_file in validations_dir.glob("*.json"):
             try:
                 with open(json_file, 'r', encoding='utf-8') as f:
-                    validation = json.load(f)
-                    all_validations.append(validation)
+                    content = f.read()
+                    # Tentar limpar o conteúdo se necessário
+                    if content.strip():
+                        validation = json.loads(content)
+                        all_validations.append(validation)
+            except json.JSONDecodeError as e:
+                # Tentar recuperar o arquivo corrompido
+                st.warning(f"⚠️ Arquivo JSON corrompido: {json_file.name}. Erro: {e}")
+                # Tentar ler linha por linha para identificar o problema
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                        st.warning(f"Linha {e.lineno} do arquivo {json_file.name} tem problema")
+                except:
+                    pass
+                # Não adicionar este arquivo à lista
+                continue
             except Exception as e:
-                st.warning(f"Erro ao ler arquivo {json_file}: {e}")
+                st.warning(f"⚠️ Erro ao ler arquivo {json_file.name}: {e}")
+                continue
         
         if all_validations:
             return pd.DataFrame(all_validations)
@@ -554,3 +630,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
