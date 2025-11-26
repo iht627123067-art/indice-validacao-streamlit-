@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
@@ -61,6 +62,26 @@ def connect_to_sheets():
         st.error(f"Erro ao conectar ao Google Sheets: {e}")
         return None
 
+# Função para converter tipos numpy/pandas para tipos Python nativos
+def convert_to_native_types(obj):
+    """Converte tipos numpy/pandas para tipos Python nativos"""
+    if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
+        return float(obj)
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_to_native_types(value) for key, value in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_to_native_types(item) for item in obj]
+    elif pd.isna(obj):
+        return None
+    else:
+        return obj
+
 # Função para salvar validação no Google Sheets
 def save_validation_to_sheets(validation_data):
     """Salva a validação no Google Sheets"""
@@ -81,23 +102,26 @@ def save_validation_to_sheets(validation_data):
         except:
             worksheet = sheet.add_worksheet("Validações", 1000, 20)
         
+        # Converter tipos numpy/pandas para tipos Python nativos
+        validation_data_clean = convert_to_native_types(validation_data)
+        
         # Preparar dados para inserção
         row_data = [
-            validation_data['timestamp'],
-            validation_data['usuario'],
-            validation_data['sistema'],
-            validation_data['ano'],
-            validation_data['dimensao_padrao'],
-            validation_data['subdimensao'],
-            validation_data['questao'],
-            validation_data['elemento'],
-            validation_data['nivel'],
-            validation_data['tipo_elemento'],
-            validation_data['texto_completo'],
-            validation_data['status'],
-            validation_data['comentario'],
-            validation_data['novo_item'],
-            validation_data['texto_novo_item']
+            validation_data_clean['timestamp'],
+            validation_data_clean['usuario'],
+            validation_data_clean['sistema'],
+            validation_data_clean['ano'],
+            validation_data_clean['dimensao_padrao'],
+            validation_data_clean['subdimensao'],
+            validation_data_clean['questao'],
+            validation_data_clean['elemento'],
+            validation_data_clean['nivel'],
+            validation_data_clean['tipo_elemento'],
+            validation_data_clean['texto_completo'],
+            validation_data_clean['status'],
+            validation_data_clean['comentario'],
+            validation_data_clean['novo_item'],
+            validation_data_clean['texto_novo_item']
         ]
         
         # Inserir dados
@@ -294,22 +318,23 @@ def main():
             if st.button("💾 Salvar Avaliação", key=f"save_{current_idx}"):
                 if status:
                     # Preparar dados da validação
+                    # Converter valores do DataFrame para tipos Python nativos
                     validation_data = {
                         'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        'usuario': usuario,
-                        'sistema': current_item['sistema'],
-                        'ano': current_item['ano'],
-                        'dimensao_padrao': current_item['dimensao_padrao'],
-                        'subdimensao': current_item['subdimensao'],
-                        'questao': current_item['questao'],
-                        'elemento': current_item['elemento'],
-                        'nivel': current_item['nivel'],
-                        'tipo_elemento': current_item['tipo_elemento'],
-                        'texto_completo': current_item['texto_completo'],
-                        'status': status,
-                        'comentario': comentario,
-                        'novo_item': novo_item,
-                        'texto_novo_item': texto_novo_item
+                        'usuario': str(usuario),
+                        'sistema': str(current_item['sistema']) if pd.notna(current_item['sistema']) else '',
+                        'ano': int(current_item['ano']) if pd.notna(current_item['ano']) else None,
+                        'dimensao_padrao': str(current_item['dimensao_padrao']) if pd.notna(current_item['dimensao_padrao']) else '',
+                        'subdimensao': str(current_item['subdimensao']) if pd.notna(current_item['subdimensao']) else '',
+                        'questao': str(current_item['questao']) if pd.notna(current_item['questao']) else '',
+                        'elemento': str(current_item['elemento']) if pd.notna(current_item['elemento']) else '',
+                        'nivel': int(current_item['nivel']) if pd.notna(current_item['nivel']) else None,
+                        'tipo_elemento': str(current_item['tipo_elemento']) if pd.notna(current_item['tipo_elemento']) else '',
+                        'texto_completo': str(current_item['texto_completo']) if pd.notna(current_item['texto_completo']) else '',
+                        'status': str(status),
+                        'comentario': str(comentario) if comentario else '',
+                        'novo_item': bool(novo_item),
+                        'texto_novo_item': str(texto_novo_item) if texto_novo_item else ''
                     }
                     
                     # Salvar no Google Sheets
@@ -364,3 +389,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
