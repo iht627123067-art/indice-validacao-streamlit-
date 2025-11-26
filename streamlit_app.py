@@ -126,16 +126,6 @@ def save_validation_local(validation_data):
         # Limpar todos os valores
         validation_data_clean = {k: clean_value(v) for k, v in validation_data_clean.items()}
         
-        # Validar JSON antes de salvar
-        try:
-            json_str = json.dumps(validation_data_clean, ensure_ascii=False, default=str)
-            # Testar se pode ser lido de volta
-            json.loads(json_str)
-        except (TypeError, ValueError, json.JSONDecodeError) as e:
-            st.error(f"Erro ao validar dados JSON: {e}")
-            # Última tentativa: converter tudo para string
-            validation_data_clean = {k: str(v) if v is not None else None for k, v in validation_data_clean.items()}
-        
         # Salvar dados
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(validation_data_clean, f, ensure_ascii=False, indent=2, default=str)
