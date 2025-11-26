@@ -31,8 +31,11 @@ def load_data():
         # Limpar dados
         df = df.fillna("")
         
-        # Filtrar apenas itens de nível 4 (questões)
-        df_questoes = df[df['nivel'] == 4].copy()
+        # Remover linhas completamente vazias
+        df = df.dropna(how='all')
+        
+        # Filtrar apenas linhas que têm Texto_Questao (questões)
+        df_questoes = df[df['Texto_Questao'].notna() & (df['Texto_Questao'] != '')].copy()
         
         return df, df_questoes
     except Exception as e:
@@ -119,16 +122,38 @@ def check_existing_validation(validations_df, item_data):
     if validations_df.empty:
         return None
     
-    # Filtrar por usuário e dados do item
-    mask = (
-        (validations_df['usuario'] == st.session_state.get('usuario', '')) &
-        (validations_df['sistema'] == item_data['sistema']) &
-        (validations_df['ano'] == item_data['ano']) &
-        (validations_df['dimensao_padrao'] == item_data['dimensao_padrao']) &
-        (validations_df['subdimensao'] == item_data['subdimensao']) &
-        (validations_df['questao'] == item_data['questao']) &
-        (validations_df['elemento'] == item_data['elemento'])
-    )
+    # Extrair valores do item_data (Series do pandas)
+    try:
+        numero_questao = str(item_data.get('Numero_Questao', '')) if 'Numero_Questao' in item_data.index else ''
+        sistema = str(item_data.get('sistema', '')) if 'sistema' in item_data.index else ''
+        ano = item_data.get('ano', None) if 'ano' in item_data.index else None
+    except (KeyError, AttributeError):
+        return None
+    
+    # Filtrar por usuário e dados do item (usando Numero_Questao como identificador principal)
+    # Verificar se a coluna existe no DataFrame de validações
+    if 'numero_questao' in validations_df.columns:
+        mask = (
+            (validations_df['usuario'] == st.session_state.get('usuario', '')) &
+            (validations_df['sistema'] == sistema) &
+            (validations_df['ano'] == ano) &
+            (validations_df['numero_questao'] == numero_questao)
+        )
+    else:
+        # Fallback: usar texto_questao se numero_questao não existir
+        try:
+            texto_questao = str(item_data.get('Texto_Questao', '')) if 'Texto_Questao' in item_data.index else ''
+        except (KeyError, AttributeError):
+            texto_questao = ''
+        
+        if 'texto_questao' in validations_df.columns:
+            mask = (
+                (validations_df['usuario'] == st.session_state.get('usuario', '')) &
+                (validations_df['sistema'] == sistema) &
+                (validations_df['texto_questao'] == texto_questao)
+            )
+        else:
+            return None
     
     existing = validations_df[mask]
     return existing.iloc[0] if not existing.empty else None
@@ -155,15 +180,15 @@ def main():
         
         if df is not None:
             # Filtro por dimensão
-            dimensoes = [''] + sorted(df_questoes['dimensao_padrao'].unique().tolist())
+            dimensoes = [''] + sorted(df_questoes['Dimensao'].dropna().unique().tolist())
             dimensao_filtro = st.selectbox("Dimensão:", dimensoes)
             
-            # Filtro por subdimensão
+            # Filtro por capacidade chave (subdimensão)
             if dimensao_filtro:
-                subdimensoes = [''] + sorted(df_questoes[df_questoes['dimensao_padrao'] == dimensao_filtro]['subdimensao'].unique().tolist())
+                capacidades = [''] + sorted(df_questoes[df_questoes['Dimensao'] == dimensao_filtro]['Capacidade_Chave'].dropna().unique().tolist())
             else:
-                subdimensoes = [''] + sorted(df_questoes['subdimensao'].unique().tolist())
-            subdimensao_filtro = st.selectbox("Subdimensão:", subdimensoes)
+                capacidades = [''] + sorted(df_questoes['Capacidade_Chave'].dropna().unique().tolist())
+            capacidade_filtro = st.selectbox("Capacidade Chave:", capacidades)
             
             # Busca por texto
             busca = st.text_input("Buscar por texto:")
@@ -172,13 +197,13 @@ def main():
             df_filtrado = df_questoes.copy()
             
             if dimensao_filtro:
-                df_filtrado = df_filtrado[df_filtrado['dimensao_padrao'] == dimensao_filtro]
+                df_filtrado = df_filtrado[df_filtrado['Dimensao'] == dimensao_filtro]
             
-            if subdimensao_filtro:
-                df_filtrado = df_filtrado[df_filtrado['subdimensao'] == subdimensao_filtro]
+            if capacidade_filtro:
+                df_filtrado = df_filtrado[df_filtrado['Capacidade_Chave'] == capacidade_filtro]
             
             if busca:
-                mask = df_filtrado['texto_completo'].str.contains(busca, case=False, na=False)
+                mask = df_filtrado['Texto_Questao'].str.contains(busca, case=False, na=False)
                 df_filtrado = df_filtrado[mask]
             
             st.info(f"📈 Total de itens: {len(df_filtrado)}")
@@ -186,8 +211,8 @@ def main():
             # Estatísticas
             if not df_filtrado.empty:
                 st.subheader("📊 Estatísticas")
-                st.write(f"**Dimensões:** {df_filtrado['dimensao_padrao'].nunique()}")
-                st.write(f"**Subdimensões:** {df_filtrado['subdimensao'].nunique()}")
+                st.write(f"**Dimensões:** {df_filtrado['Dimensao'].nunique()}")
+                st.write(f"**Capacidades Chave:** {df_filtrado['Capacidade_Chave'].nunique()}")
     
     # Área principal
     if df is None:
@@ -227,77 +252,112 @@ def main():
     current_idx = items_nao_validados[st.session_state['current_item_index'] % len(items_nao_validados)]
     current_item = df_filtrado.loc[current_idx]
     
+    # Função auxiliar para extrair valores de forma segura
+    def safe_get(item, key, default=''):
+        """Extrai valor do item de forma segura, convertendo para tipo nativo"""
+        try:
+            # Tentar acessar como Series do pandas primeiro
+            if hasattr(item, 'get'):
+                value = item.get(key, default)
+            elif hasattr(item, '__getitem__'):
+                if hasattr(item, 'index') and key in item.index:
+                    value = item[key]
+                elif key in item:
+                    value = item[key]
+                else:
+                    value = default
+            else:
+                value = default
+            
+            # Verificar se é NaN
+            if pd.isna(value):
+                return default if default != None else None
+            
+            # Converter tipos numpy para Python nativo
+            if isinstance(value, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+                return int(value)
+            elif isinstance(value, (np.floating, np.float64, np.float32, np.float16)):
+                return float(value)
+            elif isinstance(value, np.bool_):
+                return bool(value)
+            else:
+                return str(value) if value else default
+        except (KeyError, IndexError, AttributeError, TypeError):
+            return default
+    
     # Exibir informações do item
     col1, col2 = st.columns([1.5, 1.5])
     
     with col1:
         st.markdown("### 📋 Informações do Item")
         
-        # Sequência solicitada
+        # Informações iniciais (obrigatórias)
+        st.markdown("#### 📌 Informações Principais")
+        
         # 1. Número da Questão
-        numero_questao = current_item.get('numero_questao', '')
+        numero_questao = safe_get(current_item, 'Numero_Questao', '')
         if numero_questao:
             st.write(f"**Número da Questão:** {numero_questao}")
         
         # 2. Questão
-        questao = current_item.get('questao', '')
+        questao = safe_get(current_item, 'Texto_Questao', '')
         if questao:
-            st.write(f"**Questão:** {questao}")
+            st.markdown(f"**Questão:**")
+            st.text_area("", value=questao, height=100, disabled=True, key=f"questao_display_{current_idx}")
         
-        # 3. respuesta
-        respuesta = current_item.get('respuesta', '')
+        # 3. Respuesta
+        respuesta = safe_get(current_item, 'Respuesta', '')
         if respuesta:
             st.write(f"**Respuesta:** {respuesta}")
         
-        # 4. Dimensão
-        dimensao = current_item.get('dimensao_padrao', '')
+        st.markdown("---")
+        
+        # Informações adicionais
+        st.markdown("#### ℹ️ Informações Adicionais")
+        
+        # Dimensão
+        dimensao = safe_get(current_item, 'Dimensao', '')
         if dimensao:
             st.write(f"**Dimensão:** {dimensao}")
         
-        # 5. Pontuação Máx. Dimensão
-        pont_max_dimensao = current_item.get('pontuacao_maxima_dimensao', '')
-        if pd.notna(pont_max_dimensao) and pont_max_dimensao != '':
+        # Capacidade Chave
+        capacidade_chave = safe_get(current_item, 'Capacidade_Chave', '')
+        if capacidade_chave:
+            st.write(f"**Capacidade Chave:** {capacidade_chave}")
+        
+        # Pontuação Máx. Dimensão
+        pont_max_dimensao = safe_get(current_item, 'Pontuacao_Maxima_Dimensao', None)
+        if pont_max_dimensao is not None and pont_max_dimensao != '':
             st.write(f"**Pontuação Máx. Dimensão:** {pont_max_dimensao}")
         
-        # 6. Pontuação Máx. Questão
-        pont_max_questao = current_item.get('pontuacao_maxima_questao', '')
-        if pd.notna(pont_max_questao) and pont_max_questao != '':
+        # Pontuação Máx. Capacidade Chave
+        pont_max_capacidade = safe_get(current_item, 'Pontuacao_Maxima_Capacidadclave', None)
+        if pont_max_capacidade is not None and pont_max_capacidade != '':
+            st.write(f"**Pontuação Máx. Capacidade Chave:** {pont_max_capacidade}")
+        
+        # Pontuação Máx. Questão
+        pont_max_questao = safe_get(current_item, 'Pontuacao_Maxima_Questao', None)
+        if pont_max_questao is not None and pont_max_questao != '':
             st.write(f"**Pontuação Máx. Questão:** {pont_max_questao}")
         
-        # 7. Pontuação Item
-        pont_item = current_item.get('pontuacao_item', '')
+        # Pontuação Item
+        pont_item = safe_get(current_item, 'Pontuação_item', '')
         if pont_item:
             st.write(f"**Pontuação Item:** {pont_item}")
         
-        st.markdown("---")
-        
-        # Informações adicionais (opcionais)
-        st.markdown("**Informações Adicionais:**")
-        dimensao_id = current_item.get('dimensao_id_original', '')
-        if dimensao_id:
-            st.write(f"**Dimensão ID:** {dimensao_id}")
-        
-        subdimensao = current_item.get('subdimensao', '')
-        if subdimensao:
-            st.write(f"**Subdimensão:** {subdimensao}")
-        
-        elemento = current_item.get('elemento', '')
-        if elemento:
-            st.write(f"**Elemento:** {elemento}")
-        
-        nome_variavel = current_item.get('nome_variavel', '')
+        # Nome da Variável
+        nome_variavel = safe_get(current_item, 'Nomble de la variable', '')
         if nome_variavel:
             st.write(f"**Nome da Variável:** {nome_variavel}")
         
-        pont_max_capacidade = current_item.get('pontuacao_maxima_capacidade_chave', '')
-        if pd.notna(pont_max_capacidade) and pont_max_capacidade != '':
-            st.write(f"**Pontuação Máx. Capacidade Chave:** {pont_max_capacidade}")
+        # Sistema e Ano
+        sistema = safe_get(current_item, 'sistema', '')
+        if sistema:
+            st.write(f"**Sistema:** {sistema}")
         
-        st.markdown("---")
-        
-        # Texto completo
-        st.markdown("**Texto Completo:**")
-        st.text_area("", value=current_item.get('texto_completo', ''), height=150, disabled=True)
+        ano = safe_get(current_item, 'ano', None)
+        if ano is not None:
+            st.write(f"**Ano:** {ano}")
     
     with col2:
         st.markdown("### ✅ Avaliação")
@@ -416,59 +476,21 @@ def main():
                         st.error(erro)
                 else:
                     # Preparar dados da validação
-                    # Converter valores do DataFrame para tipos Python nativos
-                    def safe_get(item, key, default=''):
-                        """Extrai valor do item de forma segura, convertendo para tipo nativo"""
-                        try:
-                            # Tentar acessar como Series do pandas primeiro
-                            if hasattr(item, 'get'):
-                                value = item.get(key, default)
-                            elif hasattr(item, '__getitem__'):
-                                if hasattr(item, 'index') and key in item.index:
-                                    value = item[key]
-                                elif key in item:
-                                    value = item[key]
-                                else:
-                                    value = default
-                            else:
-                                value = default
-                            
-                            # Verificar se é NaN
-                            if pd.isna(value):
-                                return default if default != None else None
-                            
-                            # Converter tipos numpy para Python nativo
-                            if isinstance(value, (np.integer, np.int64, np.int32, np.int16, np.int8)):
-                                return int(value)
-                            elif isinstance(value, (np.floating, np.float64, np.float32, np.float16)):
-                                return float(value)
-                            elif isinstance(value, np.bool_):
-                                return bool(value)
-                            else:
-                                return str(value) if value else default
-                        except (KeyError, IndexError, AttributeError, TypeError):
-                            return default
-                    
                     validation_data = {
                         'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         'usuario': str(usuario),
                         'sistema': safe_get(current_item, 'sistema'),
                         'ano': safe_get(current_item, 'ano', None),
-                        'dimensao_id_original': safe_get(current_item, 'dimensao_id_original'),
-                        'dimensao_padrao': safe_get(current_item, 'dimensao_padrao'),
-                        'subdimensao': safe_get(current_item, 'subdimensao'),
-                        'questao': safe_get(current_item, 'questao'),
-                        'elemento': safe_get(current_item, 'elemento'),
-                        'nivel': safe_get(current_item, 'nivel', None),
-                        'tipo_elemento': safe_get(current_item, 'tipo_elemento'),
-                        'texto_completo': safe_get(current_item, 'texto_completo'),
-                        'pontuacao_maxima_dimensao': safe_get(current_item, 'pontuacao_maxima_dimensao', None),
-                        'pontuacao_maxima_capacidade_chave': safe_get(current_item, 'pontuacao_maxima_capacidade_chave', None),
-                        'nome_variavel': safe_get(current_item, 'nome_variavel'),
-                        'numero_questao': safe_get(current_item, 'numero_questao'),
-                        'respuesta': safe_get(current_item, 'respuesta'),
-                        'pontuacao_maxima_questao': safe_get(current_item, 'pontuacao_maxima_questao', None),
-                        'pontuacao_item': safe_get(current_item, 'pontuacao_item'),
+                        'dimensao': safe_get(current_item, 'Dimensao'),
+                        'pontuacao_maxima_dimensao': safe_get(current_item, 'Pontuacao_Maxima_Dimensao', None),
+                        'capacidade_chave': safe_get(current_item, 'Capacidade_Chave'),
+                        'pontuacao_maxima_capacidade_chave': safe_get(current_item, 'Pontuacao_Maxima_Capacidadclave', None),
+                        'nome_variavel': safe_get(current_item, 'Nomble de la variable'),
+                        'numero_questao': safe_get(current_item, 'Numero_Questao'),
+                        'texto_questao': safe_get(current_item, 'Texto_Questao'),
+                        'respuesta': safe_get(current_item, 'Respuesta'),
+                        'pontuacao_maxima_questao': safe_get(current_item, 'Pontuacao_Maxima_Questao', None),
+                        'pontuacao_item': safe_get(current_item, 'Pontuação_item'),
                         # Novas questões de avaliação
                         'adequacao_realidade_brasileira': str(adequacao),
                         'justificativa_adequacao': str(justificativa_adequacao) if justificativa_adequacao else '',
