@@ -121,7 +121,7 @@ def connect_to_sheets():
          #   pass
         
         # Se chegou aqui, não encontrou credenciais
-        st.error("❌ Credenciais não encontradas. Verifique:\n1. Se `credentials.json` existe na raiz\n2. Se `.streamlit/secrets.toml` está configurado\n3. Se `st.secrets` está configurado no Streamlit Cloud")
+        st.error("❌ Teste Th!!! Credenciais não encontradas. Verifique:\n1. Se `credentials.json` existe na raiz\n2. Se `.streamlit/secrets.toml` está configurado\n3. Se `st.secrets` está configurado no Streamlit Cloud")
         return None
         
     except Exception as e:
