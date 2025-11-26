@@ -233,31 +233,67 @@ def main():
     with col1:
         st.markdown("### 📋 Informações do Item")
         
-        # Hierarquia
-        st.markdown("**Hierarquia:**")
-        st.write(f"**Dimensão ID:** {current_item.get('dimensao_id_original', '')}")
-        st.write(f"**Dimensão:** {current_item.get('dimensao_padrao', '')}")
-        st.write(f"**Subdimensão:** {current_item.get('subdimensao', '')}")
-        st.write(f"**Questão:** {current_item.get('questao', '')}")
-        st.write(f"**Elemento:** {current_item.get('elemento', '')}")
+        # Sequência solicitada
+        # 1. Número da Questão
+        numero_questao = current_item.get('numero_questao', '')
+        if numero_questao:
+            st.write(f"**Número da Questão:** {numero_questao}")
         
-        # Informações adicionais
-        if current_item.get('numero_questao'):
-            st.write(f"**Número da Questão:** {current_item.get('numero_questao', '')}")
-        if current_item.get('nome_variavel'):
-            st.write(f"**Nome da Variável:** {current_item.get('nome_variavel', '')}")
-        if current_item.get('respuesta'):
-            st.write(f"**Tipo de Resposta:** {current_item.get('respuesta', '')}")
+        # 2. Questão
+        questao = current_item.get('questao', '')
+        if questao:
+            st.write(f"**Questão:** {questao}")
         
-        # Pontuações
-        if pd.notna(current_item.get('pontuacao_maxima_dimensao')):
-            st.write(f"**Pontuação Máx. Dimensão:** {current_item.get('pontuacao_maxima_dimensao', '')}")
-        if pd.notna(current_item.get('pontuacao_maxima_capacidade_chave')):
-            st.write(f"**Pontuação Máx. Capacidade Chave:** {current_item.get('pontuacao_maxima_capacidade_chave', '')}")
-        if pd.notna(current_item.get('pontuacao_maxima_questao')):
-            st.write(f"**Pontuação Máx. Questão:** {current_item.get('pontuacao_maxima_questao', '')}")
-        if current_item.get('pontuacao_item'):
-            st.write(f"**Pontuação Item:** {current_item.get('pontuacao_item', '')}")
+        # 3. respuesta
+        respuesta = current_item.get('respuesta', '')
+        if respuesta:
+            st.write(f"**Respuesta:** {respuesta}")
+        
+        # 4. Dimensão
+        dimensao = current_item.get('dimensao_padrao', '')
+        if dimensao:
+            st.write(f"**Dimensão:** {dimensao}")
+        
+        # 5. Pontuação Máx. Dimensão
+        pont_max_dimensao = current_item.get('pontuacao_maxima_dimensao', '')
+        if pd.notna(pont_max_dimensao) and pont_max_dimensao != '':
+            st.write(f"**Pontuação Máx. Dimensão:** {pont_max_dimensao}")
+        
+        # 6. Pontuação Máx. Questão
+        pont_max_questao = current_item.get('pontuacao_maxima_questao', '')
+        if pd.notna(pont_max_questao) and pont_max_questao != '':
+            st.write(f"**Pontuação Máx. Questão:** {pont_max_questao}")
+        
+        # 7. Pontuação Item
+        pont_item = current_item.get('pontuacao_item', '')
+        if pont_item:
+            st.write(f"**Pontuação Item:** {pont_item}")
+        
+        st.markdown("---")
+        
+        # Informações adicionais (opcionais)
+        st.markdown("**Informações Adicionais:**")
+        dimensao_id = current_item.get('dimensao_id_original', '')
+        if dimensao_id:
+            st.write(f"**Dimensão ID:** {dimensao_id}")
+        
+        subdimensao = current_item.get('subdimensao', '')
+        if subdimensao:
+            st.write(f"**Subdimensão:** {subdimensao}")
+        
+        elemento = current_item.get('elemento', '')
+        if elemento:
+            st.write(f"**Elemento:** {elemento}")
+        
+        nome_variavel = current_item.get('nome_variavel', '')
+        if nome_variavel:
+            st.write(f"**Nome da Variável:** {nome_variavel}")
+        
+        pont_max_capacidade = current_item.get('pontuacao_maxima_capacidade_chave', '')
+        if pd.notna(pont_max_capacidade) and pont_max_capacidade != '':
+            st.write(f"**Pontuação Máx. Capacidade Chave:** {pont_max_capacidade}")
+        
+        st.markdown("---")
         
         # Texto completo
         st.markdown("**Texto Completo:**")
