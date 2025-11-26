@@ -610,23 +610,73 @@ def main():
         if not user_validations.empty:
             st.subheader("📊 Resumo das Suas Validações")
             
+            # Verificar quais colunas existem no DataFrame
+            colunas_disponiveis = user_validations.columns.tolist()
+            
+            # Resumo baseado nas novas questões de avaliação
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                aprovados = len(user_validations[user_validations['status'] == 'Aprovar'])
-                st.metric("✅ Aprovados", aprovados)
+                # Adequação à realidade brasileira
+                if 'adequacao_realidade_brasileira' in colunas_disponiveis:
+                    adequados = len(user_validations[user_validations['adequacao_realidade_brasileira'] == 'Sim'])
+                    st.metric("✅ Adequados", adequados)
+                else:
+                    st.metric("✅ Total", len(user_validations))
             
             with col2:
-                reprovados = len(user_validations[user_validations['status'] == 'Reprovar'])
-                st.metric("❌ Reprovados", reprovados)
+                # Em partes
+                if 'adequacao_realidade_brasileira' in colunas_disponiveis:
+                    em_partes = len(user_validations[user_validations['adequacao_realidade_brasileira'] == 'Em partes'])
+                    st.metric("⚠️ Em Partes", em_partes)
+                else:
+                    st.metric("📝 Validações", len(user_validations))
             
             with col3:
-                sugestoes = len(user_validations[user_validations['status'] == 'Sugerir Redação'])
-                st.metric("✏️ Sugestões", sugestoes)
+                # Não adequados
+                if 'adequacao_realidade_brasileira' in colunas_disponiveis:
+                    nao_adequados = len(user_validations[user_validations['adequacao_realidade_brasileira'] == 'Não'])
+                    st.metric("❌ Não Adequados", nao_adequados)
+                else:
+                    st.metric("📊 Itens", len(user_validations))
             
             with col4:
-                novos = len(user_validations[user_validations['status'] == 'Incluir Novo Item'])
-                st.metric("🆕 Novos Itens", novos)
+                # Alta relevância (5)
+                if 'grau_relevancia' in colunas_disponiveis:
+                    alta_relevancia = len(user_validations[user_validations['grau_relevancia'].str.contains('5', na=False)])
+                    st.metric("⭐ Alta Relevância", alta_relevancia)
+                else:
+                    st.metric("📈 Total", len(user_validations))
+            
+            # Estatísticas adicionais
+            st.markdown("---")
+            st.markdown("#### 📈 Estatísticas Detalhadas")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if 'grau_relevancia' in colunas_disponiveis:
+                    st.markdown("**Distribuição de Relevância:**")
+                    relevancia_counts = user_validations['grau_relevancia'].value_counts().sort_index()
+                    for nivel, count in relevancia_counts.items():
+                        if nivel and str(nivel).strip():
+                            st.write(f"  {nivel}: {count}")
+            
+            with col2:
+                if 'tem_norma_exigente' in colunas_disponiveis:
+                    st.markdown("**Normas Exigentes:**")
+                    com_norma = len(user_validations[user_validations['tem_norma_exigente'] == 'Sim'])
+                    sem_norma = len(user_validations[user_validations['tem_norma_exigente'] == 'Não'])
+                    st.write(f"  Com norma: {com_norma}")
+                    st.write(f"  Sem norma: {sem_norma}")
+            
+            with col3:
+                if 'tem_base_dados_publica' in colunas_disponiveis:
+                    st.markdown("**Bases de Dados:**")
+                    com_base = len(user_validations[user_validations['tem_base_dados_publica'] == 'Sim'])
+                    sem_base = len(user_validations[user_validations['tem_base_dados_publica'] == 'Não'])
+                    st.write(f"  Com base: {com_base}")
+                    st.write(f"  Sem base: {sem_base}")
 
 if __name__ == "__main__":
     main()
