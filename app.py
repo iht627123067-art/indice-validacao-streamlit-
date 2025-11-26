@@ -62,6 +62,73 @@ def connect_to_sheets():
         st.error(f"Erro ao conectar ao Google Sheets: {e}")
         return None
 
+# Função para testar conexão com Google Sheets
+def test_google_sheets_connection():
+    """Testa a conexão com o Google Sheets e retorna informações sobre o status"""
+    result = {
+        'connected': False,
+        'message': '',
+        'details': {}
+    }
+    
+    try:
+        # Verificar arquivo de credenciais
+        creds_file = Path("credentials.json")
+        if not creds_file.exists():
+            result['message'] = "❌ Arquivo credentials.json não encontrado"
+            result['details'] = {'creds_file_exists': False}
+            return result
+        
+        result['details']['creds_file_exists'] = True
+        
+        # Tentar conectar
+        client = connect_to_sheets()
+        if not client:
+            result['message'] = "❌ Falha ao autenticar com Google Sheets"
+            return result
+        
+        result['details']['authentication'] = 'success'
+        
+        # Tentar listar planilhas (teste de permissão)
+        try:
+            sheets = client.openall()
+            result['details']['sheets_count'] = len(sheets)
+            result['details']['can_list_sheets'] = True
+            
+            # Tentar abrir ou criar planilha de teste
+            try:
+                sheet = client.open("Validações Índice Inovação")
+                result['details']['target_sheet_exists'] = True
+                result['details']['sheet_id'] = sheet.id
+                result['details']['sheet_url'] = sheet.url
+                
+                # Tentar acessar worksheet
+                try:
+                    worksheet = sheet.worksheet("Validações")
+                    result['details']['worksheet_exists'] = True
+                    result['details']['rows_count'] = len(worksheet.get_all_values())
+                except:
+                    result['details']['worksheet_exists'] = False
+                    result['details']['message'] = "Worksheet 'Validações' não existe, mas será criado automaticamente"
+                    
+            except gspread.exceptions.SpreadsheetNotFound:
+                result['details']['target_sheet_exists'] = False
+                result['details']['message'] = "Planilha 'Validações Índice Inovação' não existe, mas será criada automaticamente"
+            
+            result['connected'] = True
+            result['message'] = "✅ Conexão com Google Sheets estabelecida com sucesso!"
+            
+        except Exception as e:
+            result['message'] = f"⚠️ Conectado, mas erro ao acessar planilhas: {e}"
+            result['details']['error'] = str(e)
+            result['connected'] = True  # Ainda está conectado, só não conseguiu listar
+            
+    except Exception as e:
+        result['message'] = f"❌ Erro ao testar conexão: {e}"
+        result['details']['error'] = str(e)
+    
+    return result
+
 # Função para converter tipos numpy/pandas para tipos Python nativos
 def convert_to_native_types(obj):
     """Converte tipos numpy/pandas para tipos Python nativos"""
@@ -179,6 +246,51 @@ def main():
     # Sidebar para configurações
     with st.sidebar:
         st.header("⚙️ Configurações")
+        
+        # Teste de conexão Google Sheets
+        st.subheader("🔗 Google Sheets")
+        if st.button("🧪 Testar Conexão", key="test_connection"):
+            with st.spinner("Testando conexão..."):
+                test_result = test_google_sheets_connection()
+                
+                if test_result['connected']:
+                    st.success(test_result['message'])
+                    
+                    # Mostrar detalhes
+                    with st.expander("📋 Detalhes da Conexão"):
+                        details = test_result['details']
+                        if 'creds_file_exists' in details:
+                            st.write(f"**Arquivo de credenciais:** {'✅ Encontrado' if details['creds_file_exists'] else '❌ Não encontrado'}")
+                        
+                        if 'authentication' in details:
+                            st.write(f"**Autenticação:** ✅ Sucesso")
+                        
+                        if 'sheets_count' in details:
+                            st.write(f"**Planilhas acessíveis:** {details['sheets_count']}")
+                        
+                        if 'target_sheet_exists' in details:
+                            if details['target_sheet_exists']:
+                                st.write(f"**Planilha 'Validações Índice Inovação':** ✅ Existe")
+                                if 'sheet_url' in details:
+                                    st.write(f"**URL:** {details['sheet_url']}")
+                                if 'worksheet_exists' in details:
+                                    if details['worksheet_exists']:
+                                        st.write(f"**Worksheet 'Validações':** ✅ Existe")
+                                        if 'rows_count' in details:
+                                            st.write(f"**Linhas existentes:** {details['rows_count']}")
+                                    else:
+                                        st.write(f"**Worksheet 'Validações':** ⚠️ Será criado automaticamente")
+                            else:
+                                st.write(f"**Planilha 'Validações Índice Inovação':** ⚠️ Será criada automaticamente")
+                        
+                        if 'error' in details:
+                            st.error(f"**Erro:** {details['error']}")
+                else:
+                    st.error(test_result['message'])
+                    if 'details' in test_result and 'error' in test_result['details']:
+                        st.error(f"**Detalhes:** {test_result['details']['error']}")
+        
+        st.markdown("---")
         
         # Identificação do usuário
         usuario = st.text_input("Nome do Avaliador:", key="usuario_input")
