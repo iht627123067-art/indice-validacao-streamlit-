@@ -4,6 +4,9 @@ import numpy as np
 from datetime import datetime
 import os
 from pathlib import Path
+import gspread
+from google.oauth2.service_account import Credentials
+import json
 
 # Configuração da página
 st.set_page_config(
@@ -74,111 +77,122 @@ def convert_to_native_types(obj):
     except Exception as e:
         # Em caso de erro, retornar None ou string vazia
         return None
+# Google Sheets scopes
+SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+]
 
-# Função para salvar validação localmente
-def save_validation_local(validation_data):
-    """Salva a validação em arquivo JSON local"""
+
+def connect_to_sheets():
+    """Conecta ao Google Sheets usando `credentials.json` localizado na raiz do projeto."""
     try:
-        # Converter tipos numpy/pandas para tipos Python nativos
-        validation_data_clean = convert_to_native_types(validation_data)
-        
-        # Garantir que todos os valores sejam serializáveis
-        # Remover chaves com valores None problemáticos ou converter para strings vazias
-        for key, value in list(validation_data_clean.items()):
-            if value is None:
-                validation_data_clean[key] = None  # None é válido em JSON
-            elif isinstance(value, float) and (pd.isna(value) or np.isnan(value)):
-                validation_data_clean[key] = None
-        
-        # Criar pasta para validações se não existir
-        validations_dir = Path("validations")
-        validations_dir.mkdir(exist_ok=True)
-        
-        # Nome do arquivo baseado no usuário e timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        usuario_clean = str(validation_data_clean.get('usuario', 'usuario')).replace('/', '_').replace('\\', '_')
-        filename = f"validation_{usuario_clean}_{timestamp}.json"
-        filepath = validations_dir / filename
-        
-        # Validar e limpar dados antes de salvar
-        def clean_value(v):
-            """Limpa valores para garantir serialização JSON"""
-            if v is None:
-                return None
-            elif isinstance(v, float):
-                if pd.isna(v) or np.isnan(v) or np.isinf(v):
-                    return None
-                return v
-            elif isinstance(v, (np.integer, np.int64, np.int32, np.int16, np.int8)):
-                return int(v)
-            elif isinstance(v, (np.floating, np.float64, np.float32, np.float16)):
-                if pd.isna(v) or np.isnan(v) or np.isinf(v):
-                    return None
-                return float(v)
-            elif isinstance(v, np.bool_):
-                return bool(v)
-            elif isinstance(v, str):
-                # Remover caracteres de controle problemáticos
-                return v.replace('\x00', '').replace('\r', ' ').replace('\n', ' ')
-            else:
-                return v
-        
-        # Limpar todos os valores
-        validation_data_clean = {k: clean_value(v) for k, v in validation_data_clean.items()}
-        
-        # Salvar dados
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(validation_data_clean, f, ensure_ascii=False, indent=2, default=str)
-        
-        return True
+        # Procurar por possíveis arquivos de credenciais no workspace
+        candidates = [Path("credentials.json"), Path(".streamlit/credentials.json")]
+        # também buscar por outros arquivos que contenham 'credentials' no nome
+        for p in Path('.').glob('*credentials*.json'):
+            if p not in candidates:
+                candidates.append(p)
+
+        for candidate in candidates:
+            try:
+                if candidate.exists():
+                    creds = Credentials.from_service_account_file(str(candidate), scopes=SCOPES)
+                    client = gspread.authorize(creds)
+                    st.info(f"Usando credenciais do arquivo: {candidate}")
+                    return client
+            except Exception:
+                # tentar próximo candidato
+                continue
+
+        # 2) Fallback: carregar credenciais do Streamlit secrets (útil no Streamlit Cloud)
+        try:
+            svc = st.secrets.get('gcp_service_account') if hasattr(st, 'secrets') else None
+            if svc:
+                creds = Credentials.from_service_account_info(svc, scopes=SCOPES)
+                client = gspread.authorize(creds)
+                st.info("Usando credenciais a partir de st.secrets['gcp_service_account']")
+                return client
+        except Exception as e:
+            st.warning(f"Falha ao carregar credenciais do st.secrets: {e}")
+
+        # Se chegar aqui, nenhuma credencial disponível
+        st.error("Nenhum arquivo de credenciais válido encontrado (procurados: credentials.json, .streamlit/credentials.json e '*credentials*.json') e `st.secrets['gcp_service_account']` não está configurado.")
+        return None
     except Exception as e:
-        st.error(f"Erro ao salvar validação: {e}")
-        import traceback
-        st.error(f"Detalhes: {traceback.format_exc()}")
+        st.error(f"Erro ao conectar ao Google Sheets: {e}")
+        return None
+
+
+def save_validation_to_sheets_streamlit(validation_data, sheet_name="Validações Índice Inovação", worksheet_name="Validações_Streamlit"):
+    """Salva a validação (dicionário) em uma worksheet específica no Google Sheets.
+
+    - Cria a planilha/worksheet se não existir.
+    - Garante que o cabeçalho corresponda às chaves do dicionário ao criar a worksheet.
+    """
+    client = connect_to_sheets()
+    if not client:
         return False
 
-# Função para carregar validações existentes
-def load_existing_validations():
-    """Carrega validações existentes dos arquivos JSON"""
     try:
-        validations_dir = Path("validations")
-        if not validations_dir.exists():
-            return pd.DataFrame()
-        
-        all_validations = []
-        
-        # Ler todos os arquivos JSON
-        for json_file in validations_dir.glob("*.json"):
-            try:
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    # Tentar limpar o conteúdo se necessário
-                    if content.strip():
-                        validation = json.loads(content)
-                        all_validations.append(validation)
-            except json.JSONDecodeError as e:
-                # Tentar recuperar o arquivo corrompido
-                st.warning(f"⚠️ Arquivo JSON corrompido: {json_file.name}. Erro: {e}")
-                # Tentar ler linha por linha para identificar o problema
-                try:
-                    with open(json_file, 'r', encoding='utf-8') as f:
-                        lines = f.readlines()
-                        st.warning(f"Linha {e.lineno} do arquivo {json_file.name} tem problema")
-                except:
-                    pass
-                # Não adicionar este arquivo à lista
-                continue
-            except Exception as e:
-                st.warning(f"⚠️ Erro ao ler arquivo {json_file.name}: {e}")
-                continue
-        
-        if all_validations:
-            return pd.DataFrame(all_validations)
+        try:
+            sheet = client.open(sheet_name)
+        except gspread.exceptions.SpreadsheetNotFound:
+            sheet = client.create(sheet_name)
+
+        # Selecionar ou criar worksheet
+        try:
+            worksheet = sheet.worksheet(worksheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            # Criar worksheet com cabeçalho baseado nas chaves do validation_data
+            headers = list(validation_data.keys())
+            worksheet = sheet.add_worksheet(title=worksheet_name, rows=1000, cols=max(20, len(headers)))
+            worksheet.append_row(headers)
+
+        # Garantir headers
+        existing = worksheet.get_all_values()
+        if not existing or len(existing) == 0:
+            headers = list(validation_data.keys())
+            worksheet.append_row(headers)
         else:
-            return pd.DataFrame()
-            
+            headers = existing[0]
+
+        # Preparar linha de dados na ordem dos headers
+        row = []
+        for h in headers:
+            v = validation_data.get(h, "")
+            # Converter tipos básicos
+            if v is None:
+                row.append("")
+            elif isinstance(v, (int, float, bool, str)):
+                row.append(str(v))
+            else:
+                try:
+                    row.append(str(v))
+                except:
+                    row.append("")
+
+        worksheet.append_row(row)
+        return True
+
     except Exception as e:
-        st.warning(f"Não foi possível carregar validações existentes: {e}")
+        st.error(f"Erro ao salvar no Google Sheets: {e}")
+        return False
+
+
+def load_existing_validations():
+    """Carrega validações existentes da worksheet `Validações_Streamlit` no Google Sheets."""
+    client = connect_to_sheets()
+    if not client:
+        return pd.DataFrame()
+
+    try:
+        sheet = client.open("Validações Índice Inovação")
+        worksheet = sheet.worksheet("Validações_Streamlit")
+        data = worksheet.get_all_records()
+        return pd.DataFrame(data)
+    except Exception:
+        # Se planilha ou worksheet não existir, retornar DataFrame vazio
         return pd.DataFrame()
 
 # Função para verificar se item já foi validado
@@ -569,8 +583,8 @@ def main():
                         'comentario': str(comentario) if comentario else ''
                     }
                     
-                    # Salvar localmente
-                    if save_validation_local(validation_data):
+                    # Salvar no Google Sheets
+                    if save_validation_to_sheets_streamlit(validation_data):
                         st.success("✅ Avaliação salva com sucesso!")
                         st.session_state['current_item_index'] += 1
                         st.rerun()
