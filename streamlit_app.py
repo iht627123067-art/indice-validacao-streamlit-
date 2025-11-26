@@ -7,6 +7,7 @@ from pathlib import Path
 import gspread
 from google.oauth2.service_account import Credentials
 import json
+import toml
 
 # Configuração da página
 st.set_page_config(
@@ -85,42 +86,46 @@ SCOPES = [
 
 
 def connect_to_sheets():
-    """Conecta ao Google Sheets usando `credentials.json` localizado na raiz do projeto."""
+    """Conecta ao Google Sheets com estratégia simples e robusta."""
     try:
-        # Procurar por possíveis arquivos de credenciais no workspace
-        candidates = [Path("credentials.json"), Path(".streamlit/credentials.json")]
-        # também buscar por outros arquivos que contenham 'credentials' no nome
-        for p in Path('.').glob('*credentials*.json'):
-            if p not in candidates:
-                candidates.append(p)
-
-        for candidate in candidates:
-            try:
-                if candidate.exists():
-                    creds = Credentials.from_service_account_file(str(candidate), scopes=SCOPES)
-                    client = gspread.authorize(creds)
-                    st.info(f"Usando credenciais do arquivo: {candidate}")
-                    return client
-            except Exception:
-                # tentar próximo candidato
-                continue
-
-        # 2) Fallback: carregar credenciais do Streamlit secrets (útil no Streamlit Cloud)
-        try:
-            svc = st.secrets.get('gcp_service_account') if hasattr(st, 'secrets') else None
-            if svc:
-                creds = Credentials.from_service_account_info(svc, scopes=SCOPES)
+        # Estratégia 1: Tenta carregar de credentials.json na raiz
+        creds_path = Path("credentials.json")
+        if creds_path.exists():
+            creds = Credentials.from_service_account_file(str(creds_path), scopes=SCOPES)
+            client = gspread.authorize(creds)
+            return client
+        
+        # Estratégia 2: Tenta carregar do .streamlit/secrets.toml
+        secrets_path = Path(".streamlit/secrets.toml")
+        if secrets_path.exists():
+            import toml
+            secrets_data = toml.load(str(secrets_path))
+            if 'gcp_service_account' in secrets_data:
+                creds = Credentials.from_service_account_info(
+                    secrets_data['gcp_service_account'], 
+                    scopes=SCOPES
+                )
                 client = gspread.authorize(creds)
-                st.info("Usando credenciais a partir de st.secrets['gcp_service_account']")
                 return client
-        except Exception as e:
-            st.warning(f"Falha ao carregar credenciais do st.secrets: {e}")
-
-        # Se chegar aqui, nenhuma credencial disponível
-        st.error("Nenhum arquivo de credenciais válido encontrado (procurados: credentials.json, .streamlit/credentials.json e '*credentials*.json') e `st.secrets['gcp_service_account']` não está configurado.")
+        
+        # Estratégia 3: Tenta carregar de st.secrets (Streamlit Cloud)
+        try:
+            if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
+                creds = Credentials.from_service_account_info(
+                    st.secrets['gcp_service_account'], 
+                    scopes=SCOPES
+                )
+                client = gspread.authorize(creds)
+                return client
+        except:
+            pass
+        
+        # Se chegou aqui, não encontrou credenciais
+        st.error("❌ Credenciais não encontradas. Verifique:\n1. Se `credentials.json` existe na raiz\n2. Se `.streamlit/secrets.toml` está configurado\n3. Se `st.secrets` está configurado no Streamlit Cloud")
         return None
+        
     except Exception as e:
-        st.error(f"Erro ao conectar ao Google Sheets: {e}")
+        st.error(f"❌ Erro ao conectar ao Google Sheets: {e}")
         return None
 
 
@@ -683,4 +688,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
 
