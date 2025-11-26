@@ -22,6 +22,17 @@ SCOPES = [
     'https://www.googleapis.com/auth/drive'
 ]
 
+# Função para obter credenciais do Streamlit Secrets
+def get_credentials_from_secrets():
+    """Obtém credenciais do Google Sheets a partir do Streamlit Secrets"""
+    try:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+        return Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+    except Exception as e:
+        st.error(f"Erro ao carregar credenciais do Streamlit Secrets: {e}")
+        return None
+
 # Função para carregar dados do CSV
 @st.cache_data
 def load_data():
@@ -44,18 +55,12 @@ def load_data():
 
 # Função para conectar ao Google Sheets
 def connect_to_sheets():
-    """Conecta ao Google Sheets usando credenciais"""
+    """Conecta ao Google Sheets usando credenciais do Streamlit Secrets"""
     try:
-        # Verificar se existe arquivo de credenciais
-        creds_file = Path("credentials.json")
-        if not creds_file.exists():
-            st.error("Arquivo credentials.json não encontrado. Por favor, configure as credenciais do Google Sheets.")
+        creds = get_credentials_from_secrets()
+        if not creds:
             return None
-        
-        creds = Credentials.from_service_account_file(
-            "credentials.json", 
-            scopes=SCOPES
-        )
+            
         client = gspread.authorize(creds)
         return client
     except Exception as e:
@@ -72,14 +77,13 @@ def test_google_sheets_connection():
     }
     
     try:
-        # Verificar arquivo de credenciais
-        creds_file = Path("credentials.json")
-        if not creds_file.exists():
-            result['message'] = "❌ Arquivo credentials.json não encontrado"
-            result['details'] = {'creds_file_exists': False}
+        # Verificar se as secrets estão configuradas
+        if 'gcp_service_account' not in st.secrets:
+            result['message'] = "❌ Secrets do GCP não configuradas"
+            result['details'] = {'secrets_configured': False}
             return result
         
-        result['details']['creds_file_exists'] = True
+        result['details']['secrets_configured'] = True
         
         # Tentar conectar
         client = connect_to_sheets()
@@ -259,8 +263,8 @@ def main():
                     # Mostrar detalhes
                     with st.expander("📋 Detalhes da Conexão"):
                         details = test_result['details']
-                        if 'creds_file_exists' in details:
-                            st.write(f"**Arquivo de credenciais:** {'✅ Encontrado' if details['creds_file_exists'] else '❌ Não encontrado'}")
+                        if 'secrets_configured' in details:
+                            st.write(f"**Secrets configuradas:** {'✅ Sim' if details['secrets_configured'] else '❌ Não'}")
                         
                         if 'authentication' in details:
                             st.write(f"**Autenticação:** ✅ Sucesso")
@@ -501,4 +505,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
