@@ -78,48 +78,136 @@ def convert_to_native_types(obj):
     except Exception as e:
         # Em caso de erro, retornar None ou string vazia
         return None
+
 # Google Sheets scopes
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
 ]
 
+def get_sheet_id():
+    """Obtém o ID da planilha do Google Sheets dos secrets"""
+    try:
+        # Tenta obter do secrets do Streamlit
+        if hasattr(st, 'secrets'):
+            # Método 1: Direto do google_sheets
+            if 'google_sheets' in st.secrets and 'google_sheets_id' in st.secrets['google_sheets']:
+                return st.secrets['google_sheets']['google_sheets_id']
+            # Método 2: Direto na raiz dos secrets
+            elif 'google_sheets_id' in st.secrets:
+                return st.secrets['google_sheets_id']
+            # Método 3: Nome alternativo
+            elif 'sheet_id' in st.secrets:
+                return st.secrets['sheet_id']
+        
+        # Fallback: ID fixo (substitua pelo seu ID se necessário)
+        return "1CNoUGOC82o7dF3Q0vv244gUYtuRndxRP6sNeeOpdqsY"
+    except Exception as e:
+        st.error(f"Erro ao obter Sheet ID: {e}")
+        # Fallback para o ID que você forneceu
+        return "1CNoUGOC82o7dF3Q0vv244gUYtuRndxRP6sNeeOpdqsY"
 
 def connect_to_sheets():
-    """Conecta ao Google Sheets com estratégia simples e robusta."""
+    """Conecta ao Google Sheets priorizando st.secrets do Streamlit Cloud"""
     try:
-        # Estratégia 1: Tenta carregar de credentials.json na raiz
+        # Estratégia 1: Tenta carregar de st.secrets (Streamlit Cloud) - PRIORIDADE
+        if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
+            try:
+                creds = Credentials.from_service_account_info(
+                    st.secrets['gcp_service_account'], 
+                    scopes=SCOPES
+                )
+                client = gspread.authorize(creds)
+                return client
+            except Exception as e:
+                st.sidebar.warning(f"⚠️ Erro com st.secrets: {e}")
+        
+        # Estratégia 2: Tenta carregar do .streamlit/secrets.toml (local)
+        secrets_path = Path(".streamlit/secrets.toml")
+        if secrets_path.exists():
+            try:
+                secrets_data = toml.load(str(secrets_path))
+                if 'gcp_service_account' in secrets_data:
+                    creds = Credentials.from_service_account_info(
+                        secrets_data['gcp_service_account'], 
+                        scopes=SCOPES
+                    )
+                    client = gspread.authorize(creds)
+                    return client
+            except Exception as e:
+                st.sidebar.warning(f"⚠️ Erro com secrets.toml: {e}")
+        
+        # Estratégia 3: Tenta carregar de credentials.json na raiz (fallback)
         creds_path = Path("credentials.json")
         if creds_path.exists():
-            creds = Credentials.from_service_account_file(str(creds_path), scopes=SCOPES)
-            client = gspread.authorize(creds)
-            return client
+            try:
+                creds = Credentials.from_service_account_file(str(creds_path), scopes=SCOPES)
+                client = gspread.authorize(creds)
+                return client
+            except Exception as e:
+                st.sidebar.warning(f"⚠️ Erro com credentials.json: {e}")
         
-        # Se chegou aqui, não encontrou credenciais
-        #st.error("❌ Teste Th!!! Credenciais não encontradas. Verifique:\n1. Se `credentials.json` existe na raiz\n2. Se `.streamlit/secrets.toml` está configurado\n3. Se `st.secrets` está configurado no Streamlit Cloud")
-        st.error("❌ Teste Th!!! Credenciais não encontradas. Verifique:\n1. Se `credentials.json` existe na raiz\n2.")
+        # Se chegou aqui, não encontrou credenciais válidas
+        st.error("""
+        ❌ Credenciais do Google Sheets não encontradas. Verifique:
+        
+        **Streamlit Cloud:**
+        1. Vá em Settings → Secrets
+        2. Cole as credenciais no formato TOML
+        
+        **Desenvolvimento Local:**
+        1. Crie `.streamlit/secrets.toml` ou
+        2. Coloque `credentials.json` na raiz
+        """)
         return None
         
     except Exception as e:
         st.error(f"❌ Erro ao conectar ao Google Sheets: {e}")
         return None
 
+def test_google_sheets_connection():
+    """Testa a conexão com o Google Sheets e fornece feedback detalhado"""
+    try:
+        client = connect_to_sheets()
+        if client:
+            sheet_id = get_sheet_id()
+            try:
+                # Tenta acessar a planilha específica pelo ID
+                sheet = client.open_by_key(sheet_id)
+                st.sidebar.success(f"✅ Conexão com Google Sheets funcionando!")
+                st.sidebar.info(f"📊 Planilha: {sheet.title}")
+                return True
+            except gspread.exceptions.SpreadsheetNotFound:
+                st.sidebar.error(f"❌ Planilha com ID {sheet_id} não encontrada. Verifique o ID.")
+                return False
+            except Exception as e:
+                st.sidebar.error(f"❌ Erro ao acessar planilha: {e}")
+                return False
+        else:
+            st.sidebar.error("❌ Falha na conexão com Google Sheets")
+            return False
+    except Exception as e:
+        st.sidebar.error(f"❌ Erro na conexão: {e}")
+        return False
 
-def save_validation_to_sheets_streamlit(validation_data, sheet_name="Validações Índice Inovação", worksheet_name="Validações_Streamlit"):
+def save_validation_to_sheets_streamlit(validation_data, worksheet_name="Validações_Streamlit"):
     """Salva a validação (dicionário) em uma worksheet específica no Google Sheets.
-
-    - Cria a planilha/worksheet se não existir.
-    - Garante que o cabeçalho corresponda às chaves do dicionário ao criar a worksheet.
+    
+    Usa o sheet_id configurado nos secrets.
     """
     client = connect_to_sheets()
     if not client:
         return False
 
     try:
+        sheet_id = get_sheet_id()
+        
         try:
-            sheet = client.open(sheet_name)
+            # Abre a planilha pelo ID específico
+            sheet = client.open_by_key(sheet_id)
         except gspread.exceptions.SpreadsheetNotFound:
-            sheet = client.create(sheet_name)
+            st.error(f"❌ Planilha com ID {sheet_id} não encontrada. Verifique o ID nos secrets.")
+            return False
 
         # Selecionar ou criar worksheet
         try:
@@ -154,26 +242,33 @@ def save_validation_to_sheets_streamlit(validation_data, sheet_name="Validaçõe
                     row.append("")
 
         worksheet.append_row(row)
+        st.sidebar.success("✅ Dados salvos com sucesso!")
         return True
 
     except Exception as e:
-        st.error(f"Erro ao salvar no Google Sheets: {e}")
+        st.error(f"❌ Erro ao salvar no Google Sheets: {e}")
         return False
 
-
-def load_existing_validations():
-    """Carrega validações existentes da worksheet `Validações_Streamlit` no Google Sheets."""
+def load_existing_validations(worksheet_name="Validações_Streamlit"):
+    """Carrega validações existentes da worksheet específica no Google Sheets."""
     client = connect_to_sheets()
     if not client:
         return pd.DataFrame()
 
     try:
-        sheet = client.open("Validações Índice Inovação")
-        worksheet = sheet.worksheet("Validações_Streamlit")
+        sheet_id = get_sheet_id()
+        sheet = client.open_by_key(sheet_id)
+        worksheet = sheet.worksheet(worksheet_name)
         data = worksheet.get_all_records()
         return pd.DataFrame(data)
-    except Exception:
-        # Se planilha ou worksheet não existir, retornar DataFrame vazio
+    except gspread.exceptions.WorksheetNotFound:
+        # Se worksheet não existir, retornar DataFrame vazio
+        return pd.DataFrame()
+    except gspread.exceptions.SpreadsheetNotFound:
+        st.error(f"❌ Planilha com ID {sheet_id} não encontrada.")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"❌ Erro ao carregar validações: {e}")
         return pd.DataFrame()
 
 # Função para verificar se item já foi validado
@@ -226,6 +321,14 @@ def main():
     # Sidebar para configurações
     with st.sidebar:
         st.header("⚙️ Configurações")
+        
+        # Exibir informações da planilha
+        sheet_id = get_sheet_id()
+        st.info(f"📊 ID da Planilha: `{sheet_id}`")
+        
+        # Teste de conexão
+        if st.button("🧪 Testar Conexão Google Sheets"):
+            test_google_sheets_connection()
         
         # Identificação do usuário
         usuario = st.text_input("Nome do Avaliador:", key="usuario_input")
@@ -314,7 +417,7 @@ def main():
     
     # Função auxiliar para extrair valores de forma segura
     def safe_get(item, key, default=''):
-        """Extrai valor do item de forma segura, convertendo para tipo nativo"""
+        """Extrais valor do item de forma segura, convertendo para tipo nativo"""
         try:
             # Tentar acessar como Series do pandas primeiro
             if hasattr(item, 'get'):
@@ -664,6 +767,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
