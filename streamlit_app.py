@@ -55,7 +55,6 @@ def convert_to_native_types(obj):
         elif isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
             return int(obj)
         elif isinstance(obj, (np.floating, np.float64, np.float32, np.float16)):
-            # Verificar se não é NaN
             if pd.isna(obj) or np.isnan(obj):
                 return None
             return float(obj)
@@ -70,13 +69,10 @@ def convert_to_native_types(obj):
         elif pd.isna(obj):
             return None
         elif isinstance(obj, str):
-            # Garantir que strings não contenham caracteres problemáticos
             return str(obj)
         else:
-            # Tentar converter para string como último recurso
             return str(obj) if obj else None
     except Exception as e:
-        # Em caso de erro, retornar None ou string vazia
         return None
 
 # Google Sheets scopes
@@ -88,23 +84,17 @@ SCOPES = [
 def get_sheet_id():
     """Obtém o ID da planilha do Google Sheets dos secrets"""
     try:
-        # Tenta obter do secrets do Streamlit
         if hasattr(st, 'secrets'):
-            # Método 1: Direto do google_sheets
             if 'google_sheets' in st.secrets and 'google_sheets_id' in st.secrets['google_sheets']:
                 return st.secrets['google_sheets']['google_sheets_id']
-            # Método 2: Direto na raiz dos secrets
             elif 'google_sheets_id' in st.secrets:
                 return st.secrets['google_sheets_id']
-            # Método 3: Nome alternativo
             elif 'sheet_id' in st.secrets:
                 return st.secrets['sheet_id']
         
-        # Fallback: ID fixo (substitua pelo seu ID se necessário)
         return "1CNoUGOC82o7dF3Q0vv244gUYtuRndxRP6sNeeOpdqsY"
     except Exception as e:
         st.error(f"Erro ao obter Sheet ID: {e}")
-        # Fallback para o ID que você forneceu
         return "1CNoUGOC82o7dF3Q0vv244gUYtuRndxRP6sNeeOpdqsY"
 
 def connect_to_sheets():
@@ -147,7 +137,6 @@ def connect_to_sheets():
             except Exception as e:
                 st.sidebar.warning(f"⚠️ Erro com credentials.json: {e}")
         
-        # Se chegou aqui, não encontrou credenciais válidas
         st.error("""
         ❌ Credenciais do Google Sheets não encontradas. Verifique:
         
@@ -172,7 +161,6 @@ def test_google_sheets_connection():
         if client:
             sheet_id = get_sheet_id()
             try:
-                # Tenta acessar a planilha específica pelo ID
                 sheet = client.open_by_key(sheet_id)
                 st.sidebar.success(f"✅ Conexão com Google Sheets funcionando!")
                 st.sidebar.info(f"📊 Planilha: {sheet.title}")
@@ -191,10 +179,7 @@ def test_google_sheets_connection():
         return False
 
 def save_validation_to_sheets_streamlit(validation_data, worksheet_name="Validações_Streamlit"):
-    """Salva a validação (dicionário) em uma worksheet específica no Google Sheets.
-    
-    Usa o sheet_id configurado nos secrets.
-    """
+    """Salva a validação (dicionário) em uma worksheet específica no Google Sheets."""
     client = connect_to_sheets()
     if not client:
         return False
@@ -203,7 +188,6 @@ def save_validation_to_sheets_streamlit(validation_data, worksheet_name="Valida�
         sheet_id = get_sheet_id()
         
         try:
-            # Abre a planilha pelo ID específico
             sheet = client.open_by_key(sheet_id)
         except gspread.exceptions.SpreadsheetNotFound:
             st.error(f"❌ Planilha com ID {sheet_id} não encontrada. Verifique o ID nos secrets.")
@@ -213,7 +197,6 @@ def save_validation_to_sheets_streamlit(validation_data, worksheet_name="Valida�
         try:
             worksheet = sheet.worksheet(worksheet_name)
         except gspread.exceptions.WorksheetNotFound:
-            # Criar worksheet com cabeçalho baseado nas chaves do validation_data
             headers = list(validation_data.keys())
             worksheet = sheet.add_worksheet(title=worksheet_name, rows=1000, cols=max(20, len(headers)))
             worksheet.append_row(headers)
@@ -230,7 +213,6 @@ def save_validation_to_sheets_streamlit(validation_data, worksheet_name="Valida�
         row = []
         for h in headers:
             v = validation_data.get(h, "")
-            # Converter tipos básicos
             if v is None:
                 row.append("")
             elif isinstance(v, (int, float, bool, str)):
@@ -262,7 +244,6 @@ def load_existing_validations(worksheet_name="Validações_Streamlit"):
         data = worksheet.get_all_records()
         return pd.DataFrame(data)
     except gspread.exceptions.WorksheetNotFound:
-        # Se worksheet não existir, retornar DataFrame vazio
         return pd.DataFrame()
     except gspread.exceptions.SpreadsheetNotFound:
         st.error(f"❌ Planilha com ID {sheet_id} não encontrada.")
@@ -271,13 +252,11 @@ def load_existing_validations(worksheet_name="Validações_Streamlit"):
         st.error(f"❌ Erro ao carregar validações: {e}")
         return pd.DataFrame()
 
-# Função para verificar se item já foi validado
 def check_existing_validation(validations_df, item_data):
     """Verifica se um item já foi validado pelo usuário atual"""
     if validations_df.empty:
         return None
     
-    # Extrair valores do item_data (Series do pandas)
     try:
         numero_questao = str(item_data.get('Numero_Questao', '')) if 'Numero_Questao' in item_data.index else ''
         sistema = str(item_data.get('sistema', '')) if 'sistema' in item_data.index else ''
@@ -285,8 +264,6 @@ def check_existing_validation(validations_df, item_data):
     except (KeyError, AttributeError):
         return None
     
-    # Filtrar por usuário e dados do item (usando Numero_Questao como identificador principal)
-    # Verificar se a coluna existe no DataFrame de validações
     if 'numero_questao' in validations_df.columns:
         mask = (
             (validations_df['usuario'] == st.session_state.get('usuario', '')) &
@@ -295,7 +272,6 @@ def check_existing_validation(validations_df, item_data):
             (validations_df['numero_questao'] == numero_questao)
         )
     else:
-        # Fallback: usar texto_questao se numero_questao não existir
         try:
             texto_questao = str(item_data.get('Texto_Questao', '')) if 'Texto_Questao' in item_data.index else ''
         except (KeyError, AttributeError):
@@ -312,6 +288,35 @@ def check_existing_validation(validations_df, item_data):
     
     existing = validations_df[mask]
     return existing.iloc[0] if not existing.empty else None
+
+def safe_get(item, key, default=''):
+    """Extrai valor do item de forma segura, convertendo para tipo nativo"""
+    try:
+        if hasattr(item, 'get'):
+            value = item.get(key, default)
+        elif hasattr(item, '__getitem__'):
+            if hasattr(item, 'index') and key in item.index:
+                value = item[key]
+            elif key in item:
+                value = item[key]
+            else:
+                value = default
+        else:
+            value = default
+        
+        if pd.isna(value):
+            return default if default != None else None
+        
+        if isinstance(value, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+            return int(value)
+        elif isinstance(value, (np.floating, np.float64, np.float32, np.float16)):
+            return float(value)
+        elif isinstance(value, np.bool_):
+            return bool(value)
+        else:
+            return str(value) if value else default
+    except (KeyError, IndexError, AttributeError, TypeError):
+        return default
 
 # Interface principal
 def main():
@@ -414,39 +419,6 @@ def main():
     # Selecionar item atual
     current_idx = items_nao_validados[st.session_state['current_item_index'] % len(items_nao_validados)]
     current_item = df_filtrado.loc[current_idx]
-    
-    # Função auxiliar para extrair valores de forma segura
-    def safe_get(item, key, default=''):
-        """Extrais valor do item de forma segura, convertendo para tipo nativo"""
-        try:
-            # Tentar acessar como Series do pandas primeiro
-            if hasattr(item, 'get'):
-                value = item.get(key, default)
-            elif hasattr(item, '__getitem__'):
-                if hasattr(item, 'index') and key in item.index:
-                    value = item[key]
-                elif key in item:
-                    value = item[key]
-                else:
-                    value = default
-            else:
-                value = default
-            
-            # Verificar se é NaN
-            if pd.isna(value):
-                return default if default != None else None
-            
-            # Converter tipos numpy para Python nativo
-            if isinstance(value, (np.integer, np.int64, np.int32, np.int16, np.int8)):
-                return int(value)
-            elif isinstance(value, (np.floating, np.float64, np.float32, np.float16)):
-                return float(value)
-            elif isinstance(value, np.bool_):
-                return bool(value)
-            else:
-                return str(value) if value else default
-        except (KeyError, IndexError, AttributeError, TypeError):
-            return default
     
     # Exibir informações do item
     col1, col2 = st.columns([1.5, 1.5])
@@ -691,47 +663,59 @@ def main():
     st.progress(progress)
     st.write(f"**Progresso:** {items_validados}/{total_items} itens validados ({progress:.1%})")
     
-    # Resumo das validações
+    # Resumo das validações (CORRIGIDO)
     if not validations_df.empty:
         user_validations = validations_df[validations_df['usuario'] == usuario]
         if not user_validations.empty:
             st.subheader("📊 Resumo das Suas Validações")
             
-            # Verificar quais colunas existem no DataFrame
             colunas_disponiveis = user_validations.columns.tolist()
             
-            # Resumo baseado nas novas questões de avaliação
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                # Adequação à realidade brasileira
                 if 'adequacao_realidade_brasileira' in colunas_disponiveis:
-                    adequados = len(user_validations[user_validations['adequacao_realidade_brasileira'] == 'Sim'])
-                    st.metric("✅ Adequados", adequados)
+                    try:
+                        adequados = len(user_validations[user_validations['adequacao_realidade_brasileira'] == 'Sim'])
+                        st.metric("✅ Adequados", adequados)
+                    except:
+                        st.metric("✅ Adequados", 0)
                 else:
                     st.metric("✅ Total", len(user_validations))
             
             with col2:
-                # Em partes
                 if 'adequacao_realidade_brasileira' in colunas_disponiveis:
-                    em_partes = len(user_validations[user_validations['adequacao_realidade_brasileira'] == 'Em partes'])
-                    st.metric("⚠️ Em Partes", em_partes)
+                    try:
+                        em_partes = len(user_validations[user_validations['adequacao_realidade_brasileira'] == 'Em partes'])
+                        st.metric("⚠️ Em Partes", em_partes)
+                    except:
+                        st.metric("⚠️ Em Partes", 0)
                 else:
                     st.metric("📝 Validações", len(user_validations))
             
             with col3:
-                # Não adequados
                 if 'adequacao_realidade_brasileira' in colunas_disponiveis:
-                    nao_adequados = len(user_validations[user_validations['adequacao_realidade_brasileira'] == 'Não'])
-                    st.metric("❌ Não Adequados", nao_adequados)
+                    try:
+                        nao_adequados = len(user_validations[user_validations['adequacao_realidade_brasileira'] == 'Não'])
+                        st.metric("❌ Não Adequados", nao_adequados)
+                    except:
+                        st.metric("❌ Não Adequados", 0)
                 else:
                     st.metric("📊 Itens", len(user_validations))
             
             with col4:
-                # Alta relevância (5)
                 if 'grau_relevancia' in colunas_disponiveis:
-                    alta_relevancia = len(user_validations[user_validations['grau_relevancia'].str.contains('5', na=False)])
-                    st.metric("⭐ Alta Relevância", alta_relevancia)
+                    try:
+                        alta_relevancia = len(user_validations[
+                            user_validations['grau_relevancia'].astype(str).str.contains('5', na=False, regex=False)
+                        ])
+                        st.metric("⭐ Alta Relevância", alta_relevancia)
+                    except Exception as e:
+                        try:
+                            alta_relevancia = len(user_validations[user_validations['grau_relevancia'] == '5 - Alta relevância'])
+                            st.metric("⭐ Alta Relevância", alta_relevancia)
+                        except:
+                            st.metric("⭐ Alta Relevância", 0)
                 else:
                     st.metric("📈 Total", len(user_validations))
             
@@ -744,28 +728,35 @@ def main():
             with col1:
                 if 'grau_relevancia' in colunas_disponiveis:
                     st.markdown("**Distribuição de Relevância:**")
-                    relevancia_counts = user_validations['grau_relevancia'].value_counts().sort_index()
-                    for nivel, count in relevancia_counts.items():
-                        if nivel and str(nivel).strip():
-                            st.write(f"  {nivel}: {count}")
+                    try:
+                        relevancia_counts = user_validations['grau_relevancia'].astype(str).value_counts().sort_index()
+                        for nivel, count in relevancia_counts.items():
+                            if nivel and str(nivel).strip() != 'nan' and str(nivel).strip() != '':
+                                st.write(f"  {nivel}: {count}")
+                    except Exception as e:
+                        st.write("  Erro ao carregar distribuição")
             
             with col2:
                 if 'tem_norma_exigente' in colunas_disponiveis:
                     st.markdown("**Normas Exigentes:**")
-                    com_norma = len(user_validations[user_validations['tem_norma_exigente'] == 'Sim'])
-                    sem_norma = len(user_validations[user_validations['tem_norma_exigente'] == 'Não'])
-                    st.write(f"  Com norma: {com_norma}")
-                    st.write(f"  Sem norma: {sem_norma}")
+                    try:
+                        com_norma = len(user_validations[user_validations['tem_norma_exigente'] == 'Sim'])
+                        sem_norma = len(user_validations[user_validations['tem_norma_exigente'] == 'Não'])
+                        st.write(f"  Com norma: {com_norma}")
+                        st.write(f"  Sem norma: {sem_norma}")
+                    except:
+                        st.write("  Dados indisponíveis")
             
             with col3:
                 if 'tem_base_dados_publica' in colunas_disponiveis:
                     st.markdown("**Bases de Dados:**")
-                    com_base = len(user_validations[user_validations['tem_base_dados_publica'] == 'Sim'])
-                    sem_base = len(user_validations[user_validations['tem_base_dados_publica'] == 'Não'])
-                    st.write(f"  Com base: {com_base}")
-                    st.write(f"  Sem base: {sem_base}")
+                    try:
+                        com_base = len(user_validations[user_validations['tem_base_dados_publica'] == 'Sim'])
+                        sem_base = len(user_validations[user_validations['tem_base_dados_publica'] == 'Não'])
+                        st.write(f"  Com base: {com_base}")
+                        st.write(f"  Sem base: {sem_base}")
+                    except:
+                        st.write("  Dados indisponíveis")
 
 if __name__ == "__main__":
     main()
-
-
