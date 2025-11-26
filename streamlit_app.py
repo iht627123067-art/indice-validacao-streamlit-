@@ -95,31 +95,6 @@ def connect_to_sheets():
             client = gspread.authorize(creds)
             return client
         
-        # Estratégia 2: Tenta carregar do .streamlit/secrets.toml
-        #secrets_path = Path(".streamlit/secrets.toml")
-        #if secrets_path.exists():
-        #    import toml
-        #    secrets_data = toml.load(str(secrets_path))
-         #   if 'gcp_service_account' in secrets_data:
-          #      creds = Credentials.from_service_account_info(
-           #         secrets_data['gcp_service_account'], 
-            #        scopes=SCOPES
-             #   )
-              #  client = gspread.authorize(creds)
-               # return client
-        
-        # Estratégia 3: Tenta carregar de st.secrets (Streamlit Cloud)
-        #try:
-         #   if hasattr(st, 'secrets') and 'gcp_service_account' in st.secrets:
-          #      creds = Credentials.from_service_account_info(
-           #         st.secrets['gcp_service_account'], 
-            #        scopes=SCOPES
-             #   )
-              #  client = gspread.authorize(creds)
-               # return client
-        #except:
-         #   pass
-        
         # Se chegou aqui, não encontrou credenciais
         #st.error("❌ Teste Th!!! Credenciais não encontradas. Verifique:\n1. Se `credentials.json` existe na raiz\n2. Se `.streamlit/secrets.toml` está configurado\n3. Se `st.secrets` está configurado no Streamlit Cloud")
         st.error("❌ Teste Th!!! Credenciais não encontradas. Verifique:\n1. Se `credentials.json` existe na raiz\n2.")
